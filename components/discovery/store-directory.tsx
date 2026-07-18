@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   MapPin,
   Search,
+  ShieldCheck,
   Store,
 } from "lucide-react";
 import type { Business } from "@/lib/types";
@@ -17,6 +18,10 @@ import {
   matchesBusinessSearch,
   type Coordinates,
 } from "@/lib/discovery";
+import {
+  getLocationErrorMessage,
+  locationUnavailableMessages,
+} from "@/lib/geolocation";
 
 export function StoreDirectory({ businesses }: { businesses: Business[] }) {
   const [query, setQuery] = useState("");
@@ -25,6 +30,7 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
+  const [locationError, setLocationError] = useState("");
   const categories = useMemo(
     () =>
       Array.from(
@@ -48,11 +54,34 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
     });
   }, [businesses, category, location, query]);
 
-  function useCurrentLocation() {
-    if (!navigator.geolocation) {
+  async function useCurrentLocation() {
+    setLocationError("");
+    if (!window.isSecureContext) {
       setLocationStatus("error");
+      setLocationError(locationUnavailableMessages.insecure);
       return;
     }
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      setLocationError(locationUnavailableMessages.unsupported);
+      return;
+    }
+
+    if (navigator.permissions) {
+      try {
+        const permission = await navigator.permissions.query({
+          name: "geolocation",
+        });
+        if (permission.state === "denied") {
+          setLocationStatus("error");
+          setLocationError(getLocationErrorMessage(1));
+          return;
+        }
+      } catch {
+        // Some browsers support geolocation without exposing permission state.
+      }
+    }
+
     setLocationStatus("loading");
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -61,9 +90,13 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
           longitude: position.coords.longitude,
         });
         setLocationStatus("ready");
+        setLocationError("");
       },
-      () => setLocationStatus("error"),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 },
+      (error) => {
+        setLocationStatus("error");
+        setLocationError(getLocationErrorMessage(error.code));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
     );
   }
 
@@ -104,6 +137,7 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
             type="button"
             onClick={useCurrentLocation}
             disabled={locationStatus === "loading"}
+            aria-describedby="location-help"
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-[#176b4d] px-5 text-sm font-black text-white transition hover:bg-[#0d4d36] disabled:opacity-60"
           >
             {locationStatus === "loading" ? (
@@ -111,13 +145,42 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
             ) : (
               <LocateFixed size={17} />
             )}
-            {locationStatus === "ready" ? "Nearest first" : "Near me"}
+            {locationStatus === "loading"
+              ? "Finding you"
+              : locationStatus === "ready"
+                ? "Nearest first"
+                : locationStatus === "error"
+                  ? "Try location again"
+                  : "Find near me"}
           </button>
         </div>
-        {locationStatus === "error" ? (
-          <p className="mt-3 text-sm font-semibold text-[#9b4c3d]">
-            Location access was unavailable. Search by area or town instead.
+        <p
+          id="location-help"
+          className="mt-3 flex items-start gap-2 text-xs leading-5 text-black/50"
+        >
+          <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[#176b4d]" />
+          Your location is used only in this browser to sort nearby businesses.
+          It is not saved to your profile.
+        </p>
+        {locationStatus === "ready" ? (
+          <p className="mt-3 rounded-xl bg-[#e5efe7] px-4 py-3 text-sm font-semibold text-[#176b4d]">
+            Location enabled. The closest businesses are shown first.
           </p>
+        ) : null}
+        {locationStatus === "error" ? (
+          <div className="mt-3 rounded-xl bg-[#f9ebe6] px-4 py-3 text-sm text-[#7c3d31]">
+            <p className="font-bold">{locationError}</p>
+            <details className="mt-2">
+              <summary className="cursor-pointer font-bold underline underline-offset-4">
+                How to allow location
+              </summary>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 leading-6">
+                <li>Open the site controls beside the browser address.</li>
+                <li>Set Location to Allow.</li>
+                <li>Reload this page and select Try location again.</li>
+              </ol>
+            </details>
+          </div>
         ) : null}
       </section>
 
@@ -137,6 +200,7 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
             onClick={() => {
               setLocation(null);
               setLocationStatus("idle");
+              setLocationError("");
             }}
             className="text-sm font-bold text-[#176b4d] underline underline-offset-4"
           >
@@ -170,9 +234,16 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-black tracking-[.14em] text-[#176b4d] uppercase">
-                        {business.category}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-black tracking-[.14em] text-[#176b4d] uppercase">
+                          {business.category}
+                        </p>
+                        {business.sample ? (
+                          <span className="rounded-full bg-[#f2e4c7] px-2 py-0.5 text-[10px] font-black tracking-wide text-[#72552a] uppercase">
+                            Sample
+                          </span>
+                        ) : null}
+                      </div>
                       <h3 className="mt-2 text-xl font-black">
                         {business.name}
                       </h3>

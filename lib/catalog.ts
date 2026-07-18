@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { getDemoCatalogBySlug } from "@/lib/demo-data";
+import { demoBusinesses, getDemoCatalogBySlug } from "@/lib/demo-data";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type { Business, CatalogData, Product, ThemeName } from "@/lib/types";
@@ -50,9 +50,11 @@ export function mapProduct(row: Record<string, unknown>): Product {
 
 export const getPublicCatalog = cache(
   async (slug: string): Promise<CatalogData | null> => {
-    if (!hasSupabaseEnv) return getDemoCatalogBySlug(slug);
+    const sampleCatalog = getDemoCatalogBySlug(slug);
+    if (sampleCatalog) return sampleCatalog;
+    if (!hasSupabaseEnv) return null;
     const supabase = await createClient();
-    if (!supabase) return getDemoCatalogBySlug(slug);
+    if (!supabase) return null;
     const { data: business, error } = await supabase
       .from("businesses")
       .select("*")
@@ -74,14 +76,21 @@ export const getPublicCatalog = cache(
 );
 
 export const getPublishedBusinesses = cache(async (): Promise<Business[]> => {
-  if (!hasSupabaseEnv) return [getDemoCatalogBySlug("malabar-bakes")!.business];
+  if (!hasSupabaseEnv) return demoBusinesses;
   const supabase = await createClient();
-  if (!supabase) return [];
+  if (!supabase) return demoBusinesses;
   const { data, error } = await supabase
     .from("businesses")
     .select("*")
     .eq("published", true)
     .order("name");
-  if (error) return [];
-  return (data || []).map(mapBusiness);
+  if (error) return demoBusinesses;
+  const publishedBusinesses = (data || []).map(mapBusiness);
+  const realSlugs = new Set(
+    publishedBusinesses.map((business) => business.slug),
+  );
+  return [
+    ...publishedBusinesses,
+    ...demoBusinesses.filter((business) => !realSlugs.has(business.slug)),
+  ].sort((first, second) => first.name.localeCompare(second.name));
 });
