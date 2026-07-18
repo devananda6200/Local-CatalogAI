@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# Next.js output
+.next/
+out/
+
+# local secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# test and tooling output
+coverage/
+*.tsbuildinfo
+
+# logs and system files
+*.log
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
