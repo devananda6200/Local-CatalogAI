@@ -1,4 +1,5 @@
 # LocalCatalog AI
+demo: https://localcatalog-ai.vercel.app
 
 LocalCatalog AI is a hackathon ready, mobile first catalog builder for small restaurants and local businesses. Owners can create a profile, add products from photos, review optional AI generated suggestions, choose a theme, publish a public catalog, and share it with a QR code. Customers browse published catalogs without signing in.
 
