@@ -1,8 +1,15 @@
 import { cache } from "react";
-import { demoBusinesses, getDemoCatalogBySlug } from "@/lib/demo-data";
+import { demoCatalogs, getDemoCatalogBySlug } from "@/lib/demo-data";
+import { buildDiscoveryBusiness } from "@/lib/discovery";
 import { hasSupabaseEnv } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import type { Business, CatalogData, Product, ThemeName } from "@/lib/types";
+import type {
+  Business,
+  CatalogData,
+  DiscoveryBusiness,
+  Product,
+  ThemeName,
+} from "@/lib/types";
 
 export function isPubliclyReadable(business: Pick<Business, "published">) {
   return business.published;
@@ -75,22 +82,51 @@ export const getPublicCatalog = cache(
   },
 );
 
-export const getPublishedBusinesses = cache(async (): Promise<Business[]> => {
-  if (!hasSupabaseEnv) return demoBusinesses;
-  const supabase = await createClient();
-  if (!supabase) return demoBusinesses;
-  const { data, error } = await supabase
-    .from("businesses")
-    .select("*")
-    .eq("published", true)
-    .order("name");
-  if (error) return demoBusinesses;
-  const publishedBusinesses = (data || []).map(mapBusiness);
-  const realSlugs = new Set(
-    publishedBusinesses.map((business) => business.slug),
-  );
-  return [
-    ...publishedBusinesses,
-    ...demoBusinesses.filter((business) => !realSlugs.has(business.slug)),
-  ].sort((first, second) => first.name.localeCompare(second.name));
-});
+const demoDiscoveryBusinesses = demoCatalogs.map((catalog) =>
+  buildDiscoveryBusiness(catalog.business, catalog.products),
+);
+
+export const getPublishedBusinesses = cache(
+  async (): Promise<DiscoveryBusiness[]> => {
+    if (!hasSupabaseEnv) return demoDiscoveryBusinesses;
+    const supabase = await createClient();
+    if (!supabase) return demoDiscoveryBusinesses;
+    const { data, error } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("published", true)
+      .order("name");
+    if (error) return demoDiscoveryBusinesses;
+    const publishedBusinesses = (data || []).map(mapBusiness);
+    const businessIds = publishedBusinesses.map((business) => business.id);
+    const { data: productRows } = businessIds.length
+      ? await supabase
+          .from("products")
+          .select("business_id, price, currency, category")
+          .in("business_id", businessIds)
+          .eq("available", true)
+      : { data: [] };
+    const realDiscoveryBusinesses = publishedBusinesses.map((business) =>
+      buildDiscoveryBusiness(
+        business,
+        (productRows || [])
+          .filter((product) => product.business_id === business.id)
+          .map((product) => ({
+            businessId: String(product.business_id),
+            price: product.price === null ? null : Number(product.price),
+            currency: String(product.currency || "INR"),
+            category: String(product.category || "Other"),
+          })),
+      ),
+    );
+    const realSlugs = new Set(
+      realDiscoveryBusinesses.map((business) => business.slug),
+    );
+    return [
+      ...realDiscoveryBusinesses,
+      ...demoDiscoveryBusinesses.filter(
+        (business) => !realSlugs.has(business.slug),
+      ),
+    ].sort((first, second) => first.name.localeCompare(second.name));
+  },
+);

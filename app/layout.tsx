@@ -6,9 +6,22 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
   ),
+  applicationName: "LocalCatalog AI",
   title: { default: "LocalCatalog AI", template: "%s · LocalCatalog AI" },
   description:
     "Turn product photos into a polished, shareable local business catalog in minutes.",
+  keywords: [
+    "digital catalog",
+    "local business website",
+    "restaurant menu",
+    "product catalog",
+    "small business",
+  ],
+  openGraph: {
+    siteName: "LocalCatalog AI",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({

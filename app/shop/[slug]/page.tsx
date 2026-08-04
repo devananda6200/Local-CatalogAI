@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ThemeRenderer } from "@/components/catalog/theme-renderer";
 import { getPublicCatalog } from "@/lib/catalog";
 import { getSiteUrl } from "@/lib/env";
+import { getCatalogStructuredData, serializeStructuredData } from "@/lib/seo";
 
 export async function generateMetadata({
   params,
@@ -20,10 +21,15 @@ export async function generateMetadata({
   return {
     title: business.name,
     description: business.description,
+    alternates: { canonical: `/shop/${business.slug}` },
+    robots: business.sample
+      ? { index: false, follow: true }
+      : { index: true, follow: true },
     openGraph: {
       title: business.name,
       description: business.description,
       type: "website",
+      url: `/shop/${business.slug}`,
       images: business.coverImageUrl ? [business.coverImageUrl] : [],
     },
     twitter: {
@@ -43,10 +49,18 @@ export default async function ShopPage({
   const { slug } = await params;
   const catalog = await getPublicCatalog(slug);
   if (!catalog) notFound();
+  const publicUrl = `${getSiteUrl()}/shop/${catalog.business.slug}`;
   return (
-    <ThemeRenderer
-      catalog={catalog}
-      publicUrl={`${getSiteUrl()}/shop/${catalog.business.slug}`}
-    />
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            getCatalogStructuredData(catalog, publicUrl),
+          ),
+        }}
+      />
+      <ThemeRenderer catalog={catalog} publicUrl={publicUrl} />
+    </>
   );
 }

@@ -3,17 +3,45 @@ import Link from "next/link";
 import { ArrowLeft, MapPinned, Sparkles } from "lucide-react";
 import { StoreDirectory } from "@/components/discovery/store-directory";
 import { getPublishedBusinesses } from "@/lib/catalog";
+import { getSiteUrl } from "@/lib/env";
+import { getDirectoryStructuredData, serializeStructuredData } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Discover local businesses",
   description:
-    "Find nearby restaurants, bakeries, boutiques, and local businesses by name or location.",
+    "Search nearby restaurants, bakeries, boutiques, homestays, and local shops by name, location, category, and price.",
+  keywords: [
+    "local businesses",
+    "nearby shops",
+    "restaurants near me",
+    "boutiques near me",
+    "homestays in Kochi",
+    "local catalogs",
+  ],
+  alternates: { canonical: "/discover" },
+  openGraph: {
+    title: "Discover local businesses near you",
+    description:
+      "Compare local shops by category, product, price, and distance.",
+    url: "/discover",
+    type: "website",
+  },
 };
 
 export default async function DiscoverPage() {
   const businesses = await getPublishedBusinesses();
+  const siteUrl = getSiteUrl();
+  const indexableBusinesses = businesses.filter((business) => !business.sample);
   return (
     <main id="main" className="min-h-screen bg-[#f7f5ef] text-[#17201b]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            getDirectoryStructuredData(indexableBusinesses, siteUrl),
+          ),
+        }}
+      />
       <header className="noise bg-[#17201b] px-5 pt-6 pb-24 text-white md:px-8 md:pb-28">
         <div className="mx-auto max-w-7xl">
           <div className="flex items-center justify-between">
@@ -41,8 +69,8 @@ export default async function DiscoverPage() {
               Find a local business worth visiting.
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-white/60">
-              Search by business name, category, neighbourhood, or town. Browse
-              every published catalog without signing in.
+              Search by name, category, product, price, neighbourhood, or town.
+              Compare every published catalog without signing in.
             </p>
           </div>
         </div>

@@ -10,22 +10,35 @@ import {
   MapPin,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
   Store,
 } from "lucide-react";
-import type { Business } from "@/lib/types";
+import type { DiscoveryBusiness } from "@/lib/types";
 import {
   getBusinessDistance,
+  matchesPriceBand,
   matchesBusinessSearch,
+  sortDiscoveryBusinesses,
   type Coordinates,
+  type DiscoverySort,
+  type PriceBand,
 } from "@/lib/discovery";
 import {
   getLocationErrorMessage,
   locationUnavailableMessages,
 } from "@/lib/geolocation";
+import { formatPrice } from "@/lib/utils";
 
-export function StoreDirectory({ businesses }: { businesses: Business[] }) {
+export function StoreDirectory({
+  businesses,
+}: {
+  businesses: DiscoveryBusiness[];
+}) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
+  const [productCategory, setProductCategory] = useState("all");
+  const [priceBand, setPriceBand] = useState<PriceBand>("all");
+  const [sort, setSort] = useState<DiscoverySort>("relevance");
   const [location, setLocation] = useState<Coordinates | null>(null);
   const [locationStatus, setLocationStatus] = useState<
     "idle" | "loading" | "ready" | "error"
@@ -38,21 +51,26 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
       ).sort(),
     [businesses],
   );
+  const productCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(businesses.flatMap((business) => business.productCategories)),
+      ).sort(),
+    [businesses],
+  );
+  const activeFilterCount = [
+    category !== "all",
+    productCategory !== "all",
+    priceBand !== "all",
+  ].filter(Boolean).length;
   const results = useMemo(() => {
-    const filtered = businesses.filter((business) =>
-      matchesBusinessSearch(business, query, category),
+    const filtered = businesses.filter(
+      (business) =>
+        matchesBusinessSearch(business, query, category, productCategory) &&
+        matchesPriceBand(business, priceBand),
     );
-    return filtered.sort((first, second) => {
-      if (!location) return first.name.localeCompare(second.name);
-      const firstDistance = getBusinessDistance(first, location);
-      const secondDistance = getBusinessDistance(second, location);
-      if (firstDistance === null && secondDistance === null)
-        return first.name.localeCompare(second.name);
-      if (firstDistance === null) return 1;
-      if (secondDistance === null) return -1;
-      return firstDistance - secondDistance;
-    });
-  }, [businesses, category, location, query]);
+    return sortDiscoveryBusinesses(filtered, sort, location);
+  }, [businesses, category, location, priceBand, productCategory, query, sort]);
 
   async function useCurrentLocation() {
     setLocationError("");
@@ -91,6 +109,7 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
         });
         setLocationStatus("ready");
         setLocationError("");
+        setSort("distance");
       },
       (error) => {
         setLocationStatus("error");
@@ -103,7 +122,7 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
   return (
     <div className="mx-auto max-w-7xl px-5 pb-20 md:px-8">
       <section className="relative -mt-8 rounded-[2rem] border border-black/5 bg-[#fffefa] p-4 shadow-[0_20px_70px_rgba(30,45,36,.12)] md:p-6">
-        <div className="grid gap-3 md:grid-cols-[1fr_14rem_auto]">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <label className="relative block">
             <span className="sr-only">Search by business name or location</span>
             <Search
@@ -117,21 +136,6 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
               placeholder="Search shop name, area, or category"
               className="min-h-12 w-full rounded-2xl border border-black/10 bg-white pr-4 pl-11 text-sm transition outline-none focus:border-[#176b4d] focus:ring-3 focus:ring-[#176b4d]/10"
             />
-          </label>
-          <label>
-            <span className="sr-only">Business category</span>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              className="min-h-12 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm font-bold outline-none focus:border-[#176b4d]"
-            >
-              <option value="all">All categories</option>
-              {categories.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
           </label>
           <button
             type="button"
@@ -153,6 +157,99 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
                   ? "Try location again"
                   : "Find near me"}
           </button>
+        </div>
+        <div className="mt-4 border-t border-black/[.06] pt-4">
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <p className="flex items-center gap-2 text-sm font-black">
+              <SlidersHorizontal size={16} className="text-[#176b4d]" />
+              Refine results
+              {activeFilterCount ? (
+                <span className="grid size-5 place-items-center rounded-full bg-[#176b4d] text-[10px] text-white">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </p>
+            {activeFilterCount || query ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setCategory("all");
+                  setProductCategory("all");
+                  setPriceBand("all");
+                  setSort(location ? "distance" : "relevance");
+                }}
+                className="text-xs font-black text-[#176b4d] underline underline-offset-4"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <label className="grid gap-1.5 text-xs font-bold text-black/55">
+              Business type
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-[#17201b] outline-none focus:border-[#176b4d]"
+              >
+                <option value="all">All business types</option>
+                {categories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-xs font-bold text-black/55">
+              Product category
+              <select
+                value={productCategory}
+                onChange={(event) => setProductCategory(event.target.value)}
+                className="min-h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-[#17201b] outline-none focus:border-[#176b4d]"
+              >
+                <option value="all">All products</option>
+                {productCategories.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-xs font-bold text-black/55">
+              Price
+              <select
+                value={priceBand}
+                onChange={(event) =>
+                  setPriceBand(event.target.value as PriceBand)
+                }
+                className="min-h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-[#17201b] outline-none focus:border-[#176b4d]"
+              >
+                <option value="all">Any price</option>
+                <option value="under500">Under ₹500</option>
+                <option value="500to2000">₹500 to ₹2,000</option>
+                <option value="over2000">Over ₹2,000</option>
+              </select>
+            </label>
+            <label className="grid gap-1.5 text-xs font-bold text-black/55">
+              Sort by
+              <select
+                value={sort}
+                onChange={(event) =>
+                  setSort(event.target.value as DiscoverySort)
+                }
+                className="min-h-11 w-full rounded-xl border border-black/10 bg-white px-3 text-sm font-bold text-[#17201b] outline-none focus:border-[#176b4d]"
+              >
+                <option value="relevance">Recommended</option>
+                <option value="distance" disabled={!location}>
+                  Distance
+                </option>
+                <option value="priceLow">Price: low to high</option>
+                <option value="priceHigh">Price: high to low</option>
+                <option value="name">Business name</option>
+              </select>
+            </label>
+          </div>
         </div>
         <p
           id="location-help"
@@ -201,6 +298,7 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
               setLocation(null);
               setLocationStatus("idle");
               setLocationError("");
+              if (sort === "distance") setSort("relevance");
             }}
             className="text-sm font-bold text-[#176b4d] underline underline-offset-4"
           >
@@ -263,6 +361,17 @@ export function StoreDirectory({ businesses }: { businesses: Business[] }) {
                     <MapPin size={15} className="mt-0.5 shrink-0" />
                     <span className="line-clamp-2">{business.address}</span>
                   </p>
+                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-black/[.06] pt-4 text-sm">
+                    <p className="font-black text-[#17201b]">
+                      {business.minPrice === null
+                        ? "Ask for price"
+                        : `From ${formatPrice(business.minPrice, business.currency)}`}
+                    </p>
+                    <p className="text-xs font-bold text-black/45">
+                      {business.productCount}{" "}
+                      {business.productCount === 1 ? "item" : "items"}
+                    </p>
+                  </div>
                   <Link
                     href={`/shop/${business.slug}`}
                     className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#17201b] px-5 text-sm font-black text-white transition hover:bg-black"

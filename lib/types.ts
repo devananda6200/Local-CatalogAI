@@ -43,6 +43,15 @@ export interface CatalogData {
   products: Product[];
 }
 
+export interface DiscoveryBusiness extends Business {
+  minPrice: number | null;
+  maxPrice: number | null;
+  currency: string;
+  productCount: number;
+  productCategories: string[];
+  prices: number[];
+}
+
 export interface AiProductSuggestion {
   suggestedName: string;
   description: string;
